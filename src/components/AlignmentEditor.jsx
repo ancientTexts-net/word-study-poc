@@ -41,6 +41,16 @@ export default function Component () {
     }
   }`;
 
+  const chapterVerseTemplate = `{
+    target: docSet(id:"unfoldingWord/en_ult") {
+      document(bookCode:"%bookCode%") {
+        cv(chapter:"%chapter%" verses:["%verse%"]) {
+          text
+        }
+      }
+    }
+  }`;
+
   // const query = `
   // { docSets
   //   { 
@@ -53,7 +63,7 @@ export default function Component () {
   //const books = ['tit'];
   const books = ['1jn', '2jn', '3jn'];
   
-  const {state: { proskomma, changeIndex }} = useProskomma({ resources, books });
+  const {state: { proskomma, changeIndex }, actions} = useProskomma({ resources, books });
   //const {state} = useAlignmentAdapter({proskomma, reference, changeIndex});
   
   const {state: queryState} = useQuery({proskomma, changeIndex, query});
@@ -62,6 +72,7 @@ export default function Component () {
   const [strongs, setStrongs] = useState([]);
   const [searchResult, setSearchResult] = useState([]);
   const [searchOccurrences, setSearchOccurrences] = useState([]);
+  const [searchStats, setSearchStats] = useState([]);
   
   const onState = (a) => {
     console.log('STATE UPDATED', a);
@@ -133,8 +144,8 @@ export default function Component () {
     ).map(
         searchOccurrenceResults => searchOccurrenceResults.sort(
           (a,b) => a.bookCode.localeCompare(b.bookCode)
-                    || a.chapter.localeCompare(b.chapter)
-                    || a.verse.localeCompare(b.verse)
+                    || a.chapter - b.chapter
+                    || a.verse - b.verse
         )
       );
     
@@ -143,6 +154,68 @@ export default function Component () {
     console.log("pk // useEffect // _searchOccurrences ", _searchOccurrences);
     console.log("pk // useEffect // _sortedSearchOccurrences ", _sortedSearchOccurrences);
   }, [searchResult]);
+
+  useEffect(async() => {
+    const _searchStats = searchOccurrences?.map(
+      occurrence => ({
+        lemma: occurrence[0]?.lemma,
+        strong: occurrence[0]?.strong,
+        nOccurrences: occurrence?.length,
+        nDistinctVerses: null,
+        occurrences: occurrence.map(
+          x => ({lemma: x.lemma, bookCode: x.bookCode, chapter: x.chapter, verse: x.verse})
+        ),
+      })
+    );
+
+    // Get distinct verses:
+    const seen = {};
+    _searchStats.forEach(
+      occurrence => {
+        seen[occurrence.lemma] = [];
+        occurrence.distinctVerses = occurrence.occurrences.filter(
+          tempOccurrence => {
+            const hash = tempOccurrence.bookCode + "." + tempOccurrence.chapter + "." + tempOccurrence.verse;
+            if (!seen[occurrence.lemma][hash]) {
+              seen[occurrence.lemma][hash] = true;
+              return true;
+            }
+          }
+        )
+      }
+    );
+    
+    _searchStats.forEach(
+      occurrence => occurrence.nDistinctVerses = occurrence.distinctVerses?.length
+    );
+    
+    const searchStatsWithTextsPromises = _searchStats.map(
+      async(occurrence) => ({...occurrence, distinctVerses: await Promise.all(
+        occurrence.distinctVerses.map(
+        async(verse) => {
+          const query = chapterVerseTemplate
+            .replace(/%bookCode%/g, verse.bookCode || '')
+            .replace(/%chapter%/g, verse.chapter)
+            .replace(/%verse%/g, verse.verse);
+          //console.log("pk // texts // query ", query);
+          return (
+            {
+              bookCode: verse.bookCode,
+              chapter: verse.chapter,
+              verse: verse.verse,
+              lemma: verse.lemma,
+              //textQuery: await actions.runQuery(query),
+              text: (await actions.runQuery(query))?.data?.target?.document?.cv[0]?.text?.replaceAll("\n", " ")
+          });
+        }
+      )
+    )}));
+
+    const searchStatsWithTexts = await Promise.all(searchStatsWithTextsPromises);
+    console.log("pk // texts // searchStatsWithTexts ", searchStatsWithTexts);
+
+    setSearchStats(searchStatsWithTexts);
+  }, [searchOccurrences]);
 
   return useMemo(() => {
     //let status = (JSON.stringify(queryState?.data?.source, null, 2) || '').substring(0,100);
@@ -161,14 +234,16 @@ export default function Component () {
         <hr/>
         <pre>{(JSON.stringify(tokens, null, 2)||'').substring(0,500)}</pre>
         <hr/>
-        <pre>{(JSON.stringify(strongs, null, 2)||'').substring(0,1000)}</pre>
+        <pre>{(JSON.stringify(strongs, null, 2)||'').substring(0,500)}</pre>
+        <hr/>
+        <pre>{(JSON.stringify(searchResult, null, 2)||'')}</pre>
+        <hr/>
+        <pre>{(JSON.stringify(searchOccurrences, null, 2)||'')}</pre>
       </div>
 
       <hr/>
-      <pre>{(JSON.stringify(searchResult, null, 2)||'')}</pre>
-      <hr/>
-      <pre>{(JSON.stringify(searchOccurrences, null, 2)||'')}</pre>
+      <pre>{(JSON.stringify(searchStats, null, 2)||'')}</pre>
       </div>
     );
-  }, [tokens, strongs, searchResult, searchOccurrences]);
+  }, [tokens, strongs, searchResult, searchOccurrences, searchStats]);
 };
