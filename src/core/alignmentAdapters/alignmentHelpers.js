@@ -1,5 +1,6 @@
 import xRegExp from 'xregexp';
 import {tokenize} from 'string-punctuation-tokenizer';
+import XRegExp from 'xregexp';
 
 // bridge: aligned USFM bible
 // target: (un-)aligned USFM bible.
@@ -79,8 +80,11 @@ const _number = '[\\pN\\pNd\\pNl\\pNo]+';
 const _wordOrNumber = '(' + _word + '|' + _number + ')';
 
 // POS for source/original text:
+const SCOPE_FILTER_CHAPTER = xRegExp('chapter/(\\d+)');
+const SCOPE_FILTER_VERSE = xRegExp('verse/(\\d+)');
 const SCOPE_FILTER_SPANWITHATTS_XMORPH_1 = xRegExp('attribute/spanWithAtts/w/x-morph/1/(' + _wordOrNumber + '+)');
 const SCOPE_FILTER_SPANWITHATTS_XSTRONG_0 = xRegExp('attribute/spanWithAtts/w/strong/0/([\\w\\d]+)');
+const SCOPE_FILTER_SPANWITHATTS_LEMMA_0 = XRegExp('attribute/spanWithAtts/w/lemma/0/(' + _wordOrNumber + '+)');
 
 // ZALN
 // POS for GL text:
@@ -108,9 +112,74 @@ export const getTokensFromProskomma = async ({bibleDocument}) => {
       return {
         payload: tokenized[0],
         //alignedToken: getAlignedToken({token}),
+        
+        chapter: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_CHAPTER}),
+        verse: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_VERSE}),
+        
         alignedToken: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_XCONTENT}),
         occurrence: parseInt(getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_OCCURRENCE})) || null,
         occurrences: parseInt(getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_OCCURRENCES})) || null,
+        lemma: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_LEMMA_0}),
+        strong: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_XSTRONG_0}),
+        pos: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_XMORPH_1})
+              || getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_XMORPH_1})
+      }
+    }
+    else {
+      return null;
+    }
+  });
+
+  alignments = alignments?.filter(token => token != null);
+
+  return alignments;
+};
+
+export const getTokensFromProskommaMainSequenceDocSet = async ({docSet}) => {
+  const docSetTokensPromises = docSet?.map(
+    document => getTokensFromProskommaMainSequenceDocument({document})
+  );
+
+  const combinedTokens = [].concat.apply([], await Promise.all(docSetTokensPromises));
+
+  return combinedTokens;
+}
+
+export const getTokensFromProskommaMainSequenceDocument = async ({document}) => {
+  const SCOPE_SPANWITHATTS_W = "spanWithAtts/w";
+
+  const bookCode = document?.bookCode;
+
+  const blockTokens = document && document.mainSequence?.blocks?.map(
+    block => block.tokens
+  );
+  const tokens = [].concat.apply([], blockTokens);
+
+  let alignments = tokens?.map((token) => {
+    let isWord = (token.scopes.find(scope => scope === SCOPE_SPANWITHATTS_W) != null);
+    let tokenized = null;
+    if (isWord) {
+      // Exclude puncuation, etc.
+      tokenized = tokenize({text: token.payload});
+      isWord = (tokenized && tokenized.length > 0);
+    }
+
+    if (isWord) {
+      // Transform Proskomma into uW.
+      // TODO: detect "spanWithAttributes" scopes or "zaln" scopes.
+      return {
+        payload: tokenized[0],
+        //alignedToken: getAlignedToken({token}),
+        
+        bookCode: bookCode,
+
+        chapter: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_CHAPTER}),
+        verse: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_VERSE}),
+        
+        alignedToken: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_XCONTENT}),
+        occurrence: parseInt(getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_OCCURRENCE})) || null,
+        occurrences: parseInt(getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_OCCURRENCES})) || null,
+        lemma: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_LEMMA_0}),
         strong: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_XSTRONG_0}),
         pos: getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_SPANWITHATTS_XMORPH_1})
               || getAttributeFromScopes({scopes: token.scopes, scopeFilter: SCOPE_FILTER_ZALN_XMORPH_1})

@@ -12,7 +12,7 @@ export const RESOURCES = [
   { owner: 'Door43-Catalog', lang: 'es-419', abbr: 'ulb' },
 ];
 
-export const BOOKS = ['tit'];
+export const BOOKS = ['mat'];
 
 export const importResources = async ({
   proskomma,

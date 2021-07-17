@@ -10,8 +10,6 @@ export default function useAlignmentAdapter({proskomma, reference, changeIndex})
     original: docSet(id:"unfoldingWord/el-x-koine_ugnt") {
       document(bookCode:"%bookCode%") {
         cv(
-          chapter:"%chapter%"
-          verses:"%verse%"
           includeContext: true
           ) {
           tokens {payload scopes}
@@ -21,8 +19,6 @@ export default function useAlignmentAdapter({proskomma, reference, changeIndex})
     bridge: docSet(id:"unfoldingWord/en_ult") {
       document(bookCode:"%bookCode%") {
         cv(
-          chapter:"%chapter%"
-          verses:"%verse%"
           includeContext: true
           ) {
           tokens {payload scopes}
@@ -32,8 +28,6 @@ export default function useAlignmentAdapter({proskomma, reference, changeIndex})
     target: docSet(id:"translate_test/es-419_gst") {
       document(bookCode:"%bookCode%") {
         cv(
-          chapter:"%chapter%"
-          verses:"%verse%"
           includeContext: true
           ) {
           tokens {payload scopes}

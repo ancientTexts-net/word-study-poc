@@ -25,16 +25,6 @@ function App() {
       </header>
       <Dialog fullWidth={true} maxWidth={'xl'} open={true}>
         <div style={{margin: '12pt'}}>
-          <div style={{width: '100%', textAlign: 'center'}}>
-            <div style={{display: 'inline-block'}}>
-              <BibleReference
-                status={state}
-                actions={actions}
-                style={{}}
-              />
-            </div>
-          </div>
-          <hr />
           <AlignmentProvider>
             <AlignmentEditor reference={reference} />
           </AlignmentProvider>
