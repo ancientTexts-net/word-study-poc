@@ -1,5 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {AlignmentEditor} from 'alignment-editor-rcl';
+
+import { PieChart, Pie, Legend, Tooltip, LabelList, Label, Cell, Sector } from "recharts";
 
 import useProskomma from '../hooks/useProskomma';
 import useQuery from '../hooks/useQuery';
@@ -73,6 +75,7 @@ export default function Component () {
   const [searchResult, setSearchResult] = useState([]);
   const [searchOccurrences, setSearchOccurrences] = useState([]);
   const [searchStats, setSearchStats] = useState([]);
+  const [searchChartData, setSearchChartData] = useState([]);
   
   const onState = (a) => {
     console.log('STATE UPDATED', a);
@@ -118,12 +121,14 @@ export default function Component () {
     console.log("pk // useEffect // strongs ", _strongs);
   }, [tokens]);
 
-  useEffect(() => {
-    const searchToken = "and".toLowerCase();
+  const [searchToken, setSearchToken] = useState("see");
 
+  useEffect(() => {
     const searchSenses = strongs?.filter(
       strong => strong?.senses?.filter(
-        sense => sense?.gloss?.toLowerCase() === searchToken
+        sense => ( sense?.gloss?.toLowerCase() === searchToken 
+                    || sense?.gloss?.toLowerCase().split(',').includes(searchToken)
+                    || sense?.gloss?.toLowerCase().split(',').includes('to ' + searchToken) )
       ).length > 0
     );
     
@@ -139,10 +144,10 @@ export default function Component () {
       )
     );
 
-    const _sortedSearchOccurrences = _searchOccurrences.sort(
+    const _sortedSearchOccurrences = _searchOccurrences?.sort(
       (occurrenceA, occurrenceB) => occurrenceB.length - occurrenceA.length
     ).map(
-        searchOccurrenceResults => searchOccurrenceResults.sort(
+        searchOccurrenceResults => searchOccurrenceResults?.sort(
           (a,b) => a.bookCode.localeCompare(b.bookCode)
                     || a.chapter - b.chapter
                     || a.verse - b.verse
@@ -185,11 +190,11 @@ export default function Component () {
       }
     );
     
-    _searchStats.forEach(
+    _searchStats?.forEach(
       occurrence => occurrence.nDistinctVerses = occurrence.distinctVerses?.length
     );
     
-    const searchStatsWithTextsPromises = _searchStats.map(
+    const searchStatsWithTextsPromises = _searchStats?.map(
       async(occurrence) => ({...occurrence, distinctVerses: await Promise.all(
         occurrence.distinctVerses.map(
         async(verse) => {
@@ -217,6 +222,81 @@ export default function Component () {
     setSearchStats(searchStatsWithTexts);
   }, [searchOccurrences]);
 
+  useEffect(() => {
+    const _searchChartData = searchStats?.map(
+      stat => ({
+        name: stat.lemma,
+        value: stat.nOccurrences
+      })
+    );
+
+    setSearchChartData(_searchChartData);
+
+    console.log("pk // useEffect // searchChartData ", _searchChartData);
+  }, [searchStats]);
+  
+  const COLORS = [
+    '#313695', '#a50026','#d73027','#ffffbf','#e0f3f8','#f46d43','#fdae61','#fee090','#abd9e9','#74add1','#4575b4'
+  ];
+
+  function LightenColor (color, percent) {
+    var num = parseInt(color.replace("#",""),16),
+    amt = Math.round(2.55 * percent),
+    R = (num >> 16) + amt,
+    B = (num >> 8 & 0x00FF) + amt,
+    G = (num & 0x0000FF) + amt;
+    return "#" + (0x1000000 + (R<255?R<1?0:R:255)*0x10000 + (B<255?B<1?0:B:255)*0x100 + (G<255?G<1?0:G:255)).toString(16).slice(1);
+  };
+
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const onMouseOver = useCallback((data, index) => {
+    setActiveIndex(index);
+  }, []);
+  const onMouseLeave = useCallback((data, index) => {
+    if (selectedIndex == null)
+    {
+      setActiveIndex(null);
+    }
+    else
+    {
+      setActiveIndex(selectedIndex);
+    }
+  }, [selectedIndex]);
+  const selectedPieOnClick = useCallback((data,index) => {
+    setSelectedIndex(activeIndex);
+  }, [activeIndex]);
+  
+  const renderActiveShape = props => {
+    const RADIAN = Math.PI / 180;
+    const {
+      cx,
+      cy,
+      innerRadius,
+      outerRadius,
+      startAngle,
+      endAngle,
+      midAngle,
+      fill
+    } = props;
+    const _lightColor = LightenColor(fill, 22);
+
+    return (
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius+10}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={_lightColor}
+        onClick={selectedPieOnClick}
+        onMouseOver={onMouseOver}
+        onMouseLeave={onMouseLeave}
+      />
+    );
+  }
+
   return useMemo(() => {
     //let status = (JSON.stringify(queryState?.data?.source, null, 2) || '').substring(0,100);
     //let status = (JSON.stringify(queryState?.data?.ult, null, 2) || '').substring(0,100);
@@ -226,24 +306,60 @@ export default function Component () {
 
     return (
       <div>
-      <hr/>
-      {JSON.stringify(queryState && queryState.errors)}
-      
-      <div style={{display: 'none'}}>
-        {query}
-        <hr/>
-        <pre>{(JSON.stringify(tokens, null, 2)||'').substring(0,500)}</pre>
-        <hr/>
-        <pre>{(JSON.stringify(strongs, null, 2)||'').substring(0,500)}</pre>
-        <hr/>
-        <pre>{(JSON.stringify(searchResult, null, 2)||'')}</pre>
-        <hr/>
-        <pre>{(JSON.stringify(searchOccurrences, null, 2)||'')}</pre>
-      </div>
+        <PieChart width={1000} height={400}>
+          <Pie
+            dataKey="nOccurrences"
+            nameKey="lemma"
+            isAnimationActive={false}
+            data={searchStats}
+            paddingAngle={4}
+            outerRadius={80}
+            innerRadius={50}
+            fill="8884d8"
+            label={entry => ' ' + entry.lemma + ' '}
 
-      <hr/>
-      <pre>{(JSON.stringify(searchStats, null, 2)||'')}</pre>
+            activeIndex={activeIndex}
+            activeShape={renderActiveShape}
+            onMouseOver={onMouseOver}
+            onMouseLeave={onMouseLeave}
+          >
+            {
+              searchStats.map((entry,index) => <Cell fill={COLORS[index % COLORS.length]}/>)
+            }
+            <Label position='center' fill='#404040' textAnchor='middle' value={searchToken} 
+              style={{
+                fontSize: "24px",
+                fontWeight: "bold",
+                fontFamily: "Trebuchet MS, Arial, sans-serif"
+              }}>
+            </Label>
+          </Pie>
+          <Label position='outside'/>
+        </PieChart>
+        <hr/>
+        {
+          searchStats[selectedIndex]?.distinctVerses.map(
+            verse => <div><strong>{verse.bookCode + " " + verse.chapter + ":" + verse.verse}</strong>&nbsp;{verse.text}</div>
+          )
+        }
+
+        <hr/>
+        {JSON.stringify(queryState && queryState.errors)}
+        
+        <div style={{display: 'none'}}>
+          {query}
+          <hr/>
+          <pre>{(JSON.stringify(searchStats, null, 2)||'')}</pre>
+          <hr/>
+          <pre>{(JSON.stringify(tokens, null, 2)||'').substring(0,500)}</pre>
+          <hr/>
+          <pre>{(JSON.stringify(strongs, null, 2)||'').substring(0,500)}</pre>
+          <hr/>
+          <pre>{(JSON.stringify(searchResult, null, 2)||'')}</pre>
+          <hr/>
+          <pre>{(JSON.stringify(searchOccurrences, null, 2)||'')}</pre>
+        </div>
       </div>
     );
-  }, [tokens, strongs, searchResult, searchOccurrences, searchStats]);
+  }, [tokens, strongs, searchResult, searchOccurrences, searchStats, searchChartData, activeIndex, selectedIndex]);
 };

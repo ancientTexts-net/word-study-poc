@@ -23,7 +23,7 @@ function App() {
     <div className="App">
       <header className="App-header">
       </header>
-      <Dialog fullWidth={true} maxWidth={'xl'} open={true}>
+      <Dialog fullWidth={true} maxWidth={'xl'} fullScreen={true} open={true}>
         <div style={{margin: '12pt'}}>
           <AlignmentProvider>
             <AlignmentEditor reference={reference} />
